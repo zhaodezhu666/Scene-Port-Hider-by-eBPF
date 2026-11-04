@@ -7,8 +7,8 @@
 
     .section .tdata,"awT",%progbits
     .p2align 6
-    .global hideport_tls_align_anchor
-    .type hideport_tls_align_anchor, %object
-hideport_tls_align_anchor:
+    .global svc_tls_align_anchor
+    .type svc_tls_align_anchor, %object
+svc_tls_align_anchor:
     .xword 0
-    .size hideport_tls_align_anchor, 8
+    .size svc_tls_align_anchor, 8

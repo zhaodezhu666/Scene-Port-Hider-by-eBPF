@@ -65,10 +65,10 @@ mkdir -p "$OUT"
 "$BPF_CC" -target bpf -D__TARGET_ARCH_arm64 -g -O2 \
     -I"$SRC" \
     -I"$LIBBPF_HEADERS" \
-    -c "$SRC/hideport.bpf.c" \
-    -o "$OUT/hideport.bpf.o"
+    -c "$SRC/bpf534441b.bpf.c" \
+    -o "$OUT/bpf534441b.bpf.o"
 
-"$BPFTOOL" gen skeleton "$OUT/hideport.bpf.o" > "$SRC/hideport.skel.h"
+"$BPFTOOL" gen skeleton "$OUT/bpf534441b.bpf.o" > "$SRC/bpf534441b.bpf.skel.h"
 
 "$TARGET_CC" -O2 -Wall -Wextra -static \
     -I"$SRC" \
@@ -81,4 +81,4 @@ mkdir -p "$OUT"
 
 chmod 0755 "$OUT/svc_8667d2" 2>/dev/null || \
     echo "Warning: could not chmod $OUT/svc_8667d2; this is normal on some /mnt/* WSL mounts."
-echo "Built $OUT/svc_8667d2 and $OUT/hideport.bpf.o"
+echo "Built $OUT/svc_8667d2 and $OUT/bpf534441b.bpf.o"

