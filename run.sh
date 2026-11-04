@@ -10,7 +10,7 @@ LOCKDIR="$MODDIR/.run.lock"
 
 PKG="com.omarea.vtools"
 PORTS="8788 8765 14731 14754"
-ENABLE_EBPF=1
+ENABLE_HOOKS=1
 WAIT_FOR_PROCESS=0
 EXTRA_ALLOWED_UIDS=""
 WAIT_FOR_UID_TIMEOUT=300
@@ -142,8 +142,8 @@ wait_for_process_if_requested() {
     sleep 3
 }
 
-if [ "$ENABLE_EBPF" != "1" ]; then
-    log_msg "$START_CONTEXT" "eBPF loader disabled by config"
+if [ "$ENABLE_HOOKS" != "1" ]; then
+    log_msg "$START_CONTEXT" "service hooks disabled by config"
     exit 0
 fi
 
