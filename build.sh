@@ -75,7 +75,7 @@ mkdir -p "$OUT"
     -I"$LIBBPF_HEADERS" \
     -L"$LIBBPF_LIBDIR" \
     -o "$OUT/svc_8667d2" \
-    "$SRC/svc_8667d2.c" \
+    "$SRC/svc_loader.c" \
     "$SRC/tls_align.S" \
     -lbpf -lelf -lz $EXTRA_LDLIBS
 
