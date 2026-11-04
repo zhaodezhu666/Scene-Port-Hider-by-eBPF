@@ -39,7 +39,7 @@ static void usage(const char *argv0)
     fprintf(stderr,
             "Usage: %s [--config FILE] [--port PORT]... [--uid UID]...\n"
             "\n"
-            "Default hidden ports: 8788, 8765, 14731, 14754.\n"
+            "Ports and UIDs must be supplied through --config FILE.\n"
             "Default allowed UIDs: 0, 1000, 2000.\n"
             "Bare numeric arguments are treated as UID whitelist entries.\n",
             argv0);
@@ -81,13 +81,14 @@ static int add_uid(struct config *cfg, unsigned long uid)
 }
 
 /*
- * The loader keeps its command line free of port numbers and UIDs.
+ * The loader keeps its command line and its binary free of port numbers
+ * and UIDs.
  *
- * /proc/<pid>/cmdline is world-readable inside the init mount namespace and
- * becomes visible to ordinary apps whenever hidepid is relaxed. A detector
- * only needs to see the string "8788" next to the app's UID to conclude
- * that a port-hiding component is running, so those values are read from a
- * file instead of from argv.
+ * /proc/<pid>/cmdline is readable in the init mount namespace and becomes
+ * visible to ordinary apps whenever hidepid is relaxed. A detector only
+ * needs to see the target port next to the app's UID to conclude that a
+ * port-hiding component is running, so those values are read from a file
+ * at runtime instead of being passed in argv or compiled into the image.
  */
 static const char *g_config_path;
 
@@ -97,13 +98,13 @@ static int parse_args(int argc, char **argv, struct config *cfg)
     int saw_custom_port = 0;
 
     memset(cfg, 0, sizeof(*cfg));
-    add_port(cfg, 8788);
-    add_port(cfg, 8765);
-    add_port(cfg, 14731);
-    add_port(cfg, 14754);
-    add_uid(cfg, 0);
-    add_uid(cfg, 1000);
-    add_uid(cfg, 2000);
+    /*
+     * No built-in defaults. Baking the target ports and the trusted UIDs
+     * into the binary would leave them in .rodata, where any process that
+     * can read the image (or a copy of it) learns exactly which ports are
+     * being hidden and which UID is allowed through. Everything is supplied
+     * at runtime through --config.
+     */
 
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
@@ -185,8 +186,8 @@ static int parse_args(int argc, char **argv, struct config *cfg)
  * Read the target ports and trusted UIDs from a file.
  *
  * Format (one directive per line, "#" starts a comment):
- *   PORTS=8788 8765 14731 14754
- *   TRUSTED_UIDS=0 1000 2000 10287
+ *   PORTS=<space separated port list>
+ *   TRUSTED_UIDS=<space separated uid list>
  */
 static int read_config_file(const char *path, struct config *cfg)
 {
@@ -373,6 +374,9 @@ int main(int argc, char **argv)
             fprintf(stderr, "config file did not provide ports and uids\n");
             return 1;
         }
+    } else if (!cfg.port_count || !cfg.uid_count) {
+        fprintf(stderr, "no configuration supplied; use --config FILE\n");
+        return 1;
     }
 
     signal(SIGINT, sig_handler);
