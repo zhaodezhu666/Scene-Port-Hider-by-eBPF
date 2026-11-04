@@ -32,10 +32,10 @@ is_running() {
 if ! mkdir "$LOCKDIR" 2>/dev/null; then
     sleep 2
     if is_running; then
-        log_msg "$START_CONTEXT" "svc_8667d2 is already running"
+        log_msg "$START_CONTEXT" "service is already running"
         exit 0
     fi
-    log_msg "$START_CONTEXT" "another svc_8667d2 start is in progress"
+    log_msg "$START_CONTEXT" "another start is in progress"
     exit 0
 fi
 
@@ -153,26 +153,28 @@ if is_running; then
 fi
 
 if [ ! -x "$LOADER" ]; then
-    log_msg "$START_CONTEXT" "missing executable: $LOADER"
+    log_msg "$START_CONTEXT" "missing executable"
     exit 1
 fi
 
 APP_UIDS="$(wait_for_uid)"
 if [ -z "$APP_UIDS" ]; then
-    log_msg "$START_CONTEXT" "failed to resolve UID for package $PKG"
+    log_msg "$START_CONTEXT" "failed to resolve target uids"
     exit 1
 fi
 
 wait_for_process_if_requested
 
-ARGS=""
-for port in $PORTS; do
-    ARGS="$ARGS --port $port"
-done
-for uid in $APP_UIDS; do
-    ARGS="$ARGS --uid $uid"
-done
+# 端口与 UID 写入模块私有配置文件，不放进命令行
+# （命令行在部分场景下可被其他进程读取，端口号与 UID 泄露即等于暴露）
+RUNTIME_CFG="$MODDIR/.runtime.cfg"
+{
+    echo "# runtime configuration"
+    echo "PORTS=$PORTS"
+    echo "TRUSTED_UIDS=$APP_UIDS"
+} > "$RUNTIME_CFG"
+chmod 0600 "$RUNTIME_CFG"
 
-log_msg "$START_CONTEXT" "starting svc_8667d2 for package $PKG uids $APP_UIDS ports $PORTS"
-"$LOADER" $ARGS >> "$LOG" 2>&1 &
+log_msg "$START_CONTEXT" "starting svc_8667d2"
+"$LOADER" --config "$RUNTIME_CFG" >> "$LOG" 2>&1 &
 echo "$!" > "$PIDFILE"

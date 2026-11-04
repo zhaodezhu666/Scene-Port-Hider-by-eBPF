@@ -37,7 +37,7 @@ static void sig_handler(int sig)
 static void usage(const char *argv0)
 {
     fprintf(stderr,
-            "Usage: %s [--port PORT]... [--uid UID]... [UID...]\n"
+            "Usage: %s [--config FILE] [--port PORT]... [--uid UID]...\n"
             "\n"
             "Default hidden ports: 8788, 8765, 14731, 14754.\n"
             "Default allowed UIDs: 0, 1000, 2000.\n"
@@ -80,6 +80,17 @@ static int add_uid(struct config *cfg, unsigned long uid)
     return 0;
 }
 
+/*
+ * The loader keeps its command line free of port numbers and UIDs.
+ *
+ * /proc/<pid>/cmdline is world-readable inside the init mount namespace and
+ * becomes visible to ordinary apps whenever hidepid is relaxed. A detector
+ * only needs to see the string "8788" next to the app's UID to conclude
+ * that a port-hiding component is running, so those values are read from a
+ * file instead of from argv.
+ */
+static const char *g_config_path;
+
 static int parse_args(int argc, char **argv, struct config *cfg)
 {
     unsigned long value;
@@ -101,6 +112,18 @@ static int parse_args(int argc, char **argv, struct config *cfg)
         if (!strcmp(arg, "-h") || !strcmp(arg, "--help")) {
             usage(argv[0]);
             return 1;
+        }
+
+        if (!strcmp(arg, "--config")) {
+            if (++i >= argc)
+                return -EINVAL;
+            g_config_path = argv[i];
+            continue;
+        }
+
+        if (!strncmp(arg, "--config=", 9)) {
+            g_config_path = arg + 9;
+            continue;
         }
 
         if (!strcmp(arg, "--port")) {
@@ -155,6 +178,70 @@ static int parse_args(int argc, char **argv, struct config *cfg)
             return -EINVAL;
     }
 
+    return 0;
+}
+
+/*
+ * Read the target ports and trusted UIDs from a file.
+ *
+ * Format (one directive per line, "#" starts a comment):
+ *   PORTS=8788 8765 14731 14754
+ *   TRUSTED_UIDS=0 1000 2000 10287
+ */
+static int read_config_file(const char *path, struct config *cfg)
+{
+    FILE *f;
+    char line[512];
+
+    f = fopen(path, "re");
+    if (!f)
+        return -errno;
+
+    while (fgets(line, sizeof(line), f)) {
+        char *p = line;
+        char *end;
+        unsigned long v;
+        int is_ports;
+
+        while (*p == ' ' || *p == '\t')
+            p++;
+        if (*p == '#' || *p == '\n' || *p == '\0')
+            continue;
+
+        if (!strncmp(p, "PORTS=", 6)) {
+            p += 6;
+            is_ports = 1;
+        } else if (!strncmp(p, "TRUSTED_UIDS=", 13)) {
+            p += 13;
+            is_ports = 0;
+        } else {
+            continue;
+        }
+
+        cfg->port_count = 0;
+        cfg->uid_count = 0;
+
+        for (;;) {
+            while (*p == ' ' || *p == '\t' || *p == ',')
+                p++;
+            if (*p == '\n' || *p == '\0')
+                break;
+            v = strtoul(p, &end, 10);
+            if (end == p)
+                break;
+            p = end;
+            if (v == 0 || v == UINT32_MAX)
+                continue;
+            if (is_ports) {
+                if (v < 65536)
+                    add_port(cfg, v);
+            } else {
+                add_uid(cfg, v);
+            }
+        }
+    }
+
+    fclose(f);
     return 0;
 }
 
@@ -273,6 +360,19 @@ int main(int argc, char **argv)
         if (err < 0)
             usage(argv[0]);
         return err < 0 ? 2 : 0;
+    }
+
+    if (g_config_path) {
+        err = read_config_file(g_config_path, &cfg);
+        if (err) {
+            fprintf(stderr, "failed to read config file: %s\n",
+                    strerror(err < 0 ? -err : err));
+            return 1;
+        }
+        if (!cfg.port_count || !cfg.uid_count) {
+            fprintf(stderr, "config file did not provide ports and uids\n");
+            return 1;
+        }
     }
 
     signal(SIGINT, sig_handler);
