@@ -13,7 +13,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-#include "svc.skel.h"
+#include "hideport.skel.h"
 
 #define MAX_PORTS 16
 #define MAX_UIDS 32
