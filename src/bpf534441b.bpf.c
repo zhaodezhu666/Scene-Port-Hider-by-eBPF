@@ -38,8 +38,18 @@
  */
 #define ENABLE_BIND_REWRITE 0
 
-#define REDIRECT_PORT_BASE 49152U
-#define REDIRECT_PORT_SPAN 16383U
+/*
+ * Redirect targets live in 1024-49151, the registered-but-unassigned range.
+ * The ephemeral range (49152-65535) was deliberately avoided: a local
+ * service can legitimately hold an ephemeral port, and connecting to it
+ * would succeed and give away that the real port is in use. Ports below
+ * 1024 are equally unsuitable (privilege semantics, and port 1 in
+ * particular is a well-known service). The range below is never bound
+ * by normal services, so the connect reliably fails with ECONNREFUSED,
+ * exactly like a closed port on a stock device.
+ */
+#define REDIRECT_PORT_BASE 1024U
+#define REDIRECT_PORT_SPAN 48127U
 #define IPV4_LOOPBACK_PREFIX 0x7f000000U
 #define PORT_ORDER_NET 1
 #define PORT_ORDER_HOST 2
