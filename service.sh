@@ -1,4 +1,4 @@
 #!/system/bin/sh
 MODDIR=${0%/*}
 
-sh "$MODDIR/hideport_start.sh" service >/dev/null 2>&1 &
+sh "$MODDIR/run.sh" service >/dev/null 2>&1 &

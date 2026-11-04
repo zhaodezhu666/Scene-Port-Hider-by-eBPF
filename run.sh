@@ -1,11 +1,12 @@
 #!/system/bin/sh
 
 MODDIR=${0%/*}
-CONF="$MODDIR/hideport.conf"
-LOADER="$MODDIR/system/bin/hideport_loader"
-LOG="$MODDIR/hideport.log"
-PIDFILE="/dev/hideport_loader.pid"
-LOCKDIR="/dev/hideport_loader.lock"
+CONF="$MODDIR/cfg.conf"
+LOADER="$MODDIR/system/bin/svc_8667d2"
+LOG="$MODDIR/run.log"
+# 指纹文件放在模块私有目录，避免普通 App 通过 stat("/dev/...") 探测到本模块
+PIDFILE="$MODDIR/.run.pid"
+LOCKDIR="$MODDIR/.run.lock"
 
 PKG="com.omarea.vtools"
 PORTS="8788 8765 14731 14754"
@@ -31,10 +32,10 @@ is_running() {
 if ! mkdir "$LOCKDIR" 2>/dev/null; then
     sleep 2
     if is_running; then
-        log_msg "$START_CONTEXT" "hideport_loader is already running"
+        log_msg "$START_CONTEXT" "svc_8667d2 is already running"
         exit 0
     fi
-    log_msg "$START_CONTEXT" "another hideport_loader start is in progress"
+    log_msg "$START_CONTEXT" "another svc_8667d2 start is in progress"
     exit 0
 fi
 
@@ -147,7 +148,7 @@ if [ "$ENABLE_EBPF" != "1" ]; then
 fi
 
 if is_running; then
-    log_msg "$START_CONTEXT" "hideport_loader is already running"
+    log_msg "$START_CONTEXT" "svc_8667d2 is already running"
     exit 0
 fi
 
@@ -172,6 +173,6 @@ for uid in $APP_UIDS; do
     ARGS="$ARGS --uid $uid"
 done
 
-log_msg "$START_CONTEXT" "starting hideport_loader for package $PKG uids $APP_UIDS ports $PORTS"
+log_msg "$START_CONTEXT" "starting svc_8667d2 for package $PKG uids $APP_UIDS ports $PORTS"
 "$LOADER" $ARGS >> "$LOG" 2>&1 &
 echo "$!" > "$PIDFILE"

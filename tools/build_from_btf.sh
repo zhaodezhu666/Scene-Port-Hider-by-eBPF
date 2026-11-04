@@ -89,4 +89,4 @@ bash "$ROOT/build.sh"
 echo "==> Packaging KernelSU module"
 bash "$ROOT/package.sh"
 
-echo "Built $ROOT/../hideSceneport_module.zip"
+echo "Built $ROOT/../sysee565f.zip"

@@ -2,15 +2,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ZIP="${1:-$ROOT/../hideSceneport_module.zip}"
+ZIP="${1:-$ROOT/../sysee565f.zip}"
 
-if [[ ! -f "$ROOT/system/bin/hideport_loader" ]]; then
-    echo "Missing executable: $ROOT/system/bin/hideport_loader" >&2
+if [[ ! -f "$ROOT/system/bin/svc_8667d2" ]]; then
+    echo "Missing executable: $ROOT/system/bin/svc_8667d2" >&2
     echo "Run ./build.sh first." >&2
     exit 1
 fi
 
-fingerprint="$ROOT/kernel_btf.sha256"
+fingerprint="$ROOT/sysee565f.sig"
 btf_source=""
 for candidate in "$ROOT/btf/vmlinux.btf" "$ROOT/vmlinux.btf"; do
     if [[ -f "$candidate" ]]; then
@@ -33,16 +33,16 @@ fi
     cd "$ROOT"
     files=(
         module.prop
-        hideport.conf
+        cfg.conf
         post-fs-data.sh
         service.sh
-        hideport_start.sh
+        run.sh
         customize.sh
         uninstall.sh
-        system/bin/hideport_loader
+        system/bin/svc_8667d2
     )
-    if [[ -f kernel_btf.sha256 ]]; then
-        files+=(kernel_btf.sha256)
+    if [[ -f sysee565f.sig ]]; then
+        files+=(sysee565f.sig)
     fi
 
     rm -f "$ZIP"

@@ -13,7 +13,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-#include "hideport.skel.h"
+#include "svc.skel.h"
 
 #define MAX_PORTS 16
 #define MAX_UIDS 32
@@ -178,7 +178,7 @@ static int setup_ports(struct hideport_bpf *skel, const struct config *cfg)
     for (int i = 0; i < cfg->port_count; i++) {
         __u16 net_key = htons(cfg->ports[i]);
 
-        if (bpf_map_update_elem(bpf_map__fd(skel->maps.target_ports),
+        if (bpf_map_update_elem(bpf_map__fd(skel->maps.lpf534441b_target_ports),
                                 &net_key, &net_value, BPF_ANY)) {
             fprintf(stderr, "failed to add port %u: %s\n",
                     cfg->ports[i], strerror(errno));
@@ -198,7 +198,7 @@ static int setup_uids(struct hideport_bpf *skel, const struct config *cfg)
     for (int i = 0; i < cfg->uid_count; i++) {
         __u32 key = cfg->uids[i];
 
-        if (bpf_map_update_elem(bpf_map__fd(skel->maps.allowed_uids),
+        if (bpf_map_update_elem(bpf_map__fd(skel->maps.lpf534441b_allowed_uids),
                                 &key, &value, BPF_ANY)) {
             fprintf(stderr, "failed to add uid %u: %s\n",
                     cfg->uids[i], strerror(errno));
@@ -307,8 +307,8 @@ static int attach_getsockname_probes(struct hideport_bpf *skel,
     };
 
     for (size_t i = 0; i < sizeof(direct_symbols) / sizeof(direct_symbols[0]); i++) {
-        if (!attach_getsockname_pair(skel->progs.hideport_getsockname_entry_direct,
-                                     skel->progs.hideport_getsockname_ret,
+        if (!attach_getsockname_pair(skel->progs.lpf534441b_getsockname_entry_direct,
+                                     skel->progs.lpf534441b_getsockname_ret,
                                      direct_symbols[i],
                                      entry_link,
                                      ret_link)) {
@@ -317,8 +317,8 @@ static int attach_getsockname_probes(struct hideport_bpf *skel,
     }
 
     for (size_t i = 0; i < sizeof(arm64_symbols) / sizeof(arm64_symbols[0]); i++) {
-        if (!attach_getsockname_pair(skel->progs.hideport_getsockname_entry_arm64,
-                                     skel->progs.hideport_getsockname_ret,
+        if (!attach_getsockname_pair(skel->progs.lpf534441b_getsockname_entry_arm64,
+                                     skel->progs.lpf534441b_getsockname_ret,
                                      arm64_symbols[i],
                                      entry_link,
                                      ret_link)) {
@@ -377,8 +377,8 @@ static int attach_bind_probes(struct hideport_bpf *skel,
     };
 
     for (size_t i = 0; i < sizeof(direct_symbols) / sizeof(direct_symbols[0]); i++) {
-        if (!attach_bind_pair(skel->progs.hideport_bind_entry_direct,
-                              skel->progs.hideport_bind_ret,
+        if (!attach_bind_pair(skel->progs.lpf534441b_bind_entry_direct,
+                              skel->progs.lpf534441b_bind_ret,
                               direct_symbols[i],
                               entry_link,
                               ret_link)) {
@@ -387,8 +387,8 @@ static int attach_bind_probes(struct hideport_bpf *skel,
     }
 
     for (size_t i = 0; i < sizeof(arm64_symbols) / sizeof(arm64_symbols[0]); i++) {
-        if (!attach_bind_pair(skel->progs.hideport_bind_entry_arm64,
-                              skel->progs.hideport_bind_ret,
+        if (!attach_bind_pair(skel->progs.lpf534441b_bind_entry_arm64,
+                              skel->progs.lpf534441b_bind_ret,
                               arm64_symbols[i],
                               entry_link,
                               ret_link)) {
@@ -435,14 +435,14 @@ static struct bpf_link *attach_optional_close_probe(struct hideport_bpf *skel)
     };
     struct bpf_link *link;
 
-    link = try_attach_close_symbols(skel->progs.hideport_close_entry_direct,
+    link = try_attach_close_symbols(skel->progs.lpf534441b_close_entry_direct,
                                     direct_symbols,
                                     sizeof(direct_symbols) / sizeof(direct_symbols[0]),
                                     "direct");
     if (link)
         return link;
 
-    return try_attach_close_symbols(skel->progs.hideport_close_entry_arm64,
+    return try_attach_close_symbols(skel->progs.lpf534441b_close_entry_arm64,
                                     arm64_symbols,
                                     sizeof(arm64_symbols) / sizeof(arm64_symbols[0]),
                                     "arm64 syscall-wrapper");
@@ -510,7 +510,7 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    err = attach_cgroup_connect_prog(skel->progs.hideport_connect4,
+    err = attach_cgroup_connect_prog(skel->progs.lpf534441b_connect4,
                                      cgroup_fd,
                                      BPF_CGROUP_INET4_CONNECT,
                                      "connect4");
@@ -518,7 +518,7 @@ int main(int argc, char **argv)
         goto cleanup;
     connect4_attached = 1;
 
-    err = attach_cgroup_connect_prog(skel->progs.hideport_connect6,
+    err = attach_cgroup_connect_prog(skel->progs.lpf534441b_connect6,
                                      cgroup_fd,
                                      BPF_CGROUP_INET6_CONNECT,
                                      "connect6");
@@ -552,7 +552,7 @@ int main(int argc, char **argv)
     }
 
     if (bind_rewrite_enabled) {
-        err = attach_cgroup_connect_prog(skel->progs.hideport_bind4,
+        err = attach_cgroup_connect_prog(skel->progs.lpf534441b_bind4,
                                          cgroup_fd,
                                          BPF_CGROUP_INET4_BIND,
                                          "bind4");
@@ -560,7 +560,7 @@ int main(int argc, char **argv)
             goto cleanup;
         bind4_attached = 1;
 
-        err = attach_cgroup_connect_prog(skel->progs.hideport_bind6,
+        err = attach_cgroup_connect_prog(skel->progs.lpf534441b_bind6,
                                          cgroup_fd,
                                          BPF_CGROUP_INET6_BIND,
                                          "bind6");
@@ -577,22 +577,22 @@ int main(int argc, char **argv)
 
 cleanup:
     if (bind6_attached)
-        detach_cgroup_connect_prog(skel->progs.hideport_bind6,
+        detach_cgroup_connect_prog(skel->progs.lpf534441b_bind6,
                                    cgroup_fd,
                                    BPF_CGROUP_INET6_BIND,
                                    "bind6");
     if (bind4_attached)
-        detach_cgroup_connect_prog(skel->progs.hideport_bind4,
+        detach_cgroup_connect_prog(skel->progs.lpf534441b_bind4,
                                    cgroup_fd,
                                    BPF_CGROUP_INET4_BIND,
                                    "bind4");
     if (connect6_attached)
-        detach_cgroup_connect_prog(skel->progs.hideport_connect6,
+        detach_cgroup_connect_prog(skel->progs.lpf534441b_connect6,
                                    cgroup_fd,
                                    BPF_CGROUP_INET6_CONNECT,
                                    "connect6");
     if (connect4_attached)
-        detach_cgroup_connect_prog(skel->progs.hideport_connect4,
+        detach_cgroup_connect_prog(skel->progs.lpf534441b_connect4,
                                    cgroup_fd,
                                    BPF_CGROUP_INET4_CONNECT,
                                    "connect4");

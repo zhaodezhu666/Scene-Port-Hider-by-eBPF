@@ -94,7 +94,7 @@ bash "$ROOT/package.sh"
 cat <<EOF
 
 Done:
-  $ROOT/../hideSceneport_module.zip
+  $ROOT/../sysee565f.zip
 
 Install this zip in KernelSU Manager, then reboot.
 Logs on device:

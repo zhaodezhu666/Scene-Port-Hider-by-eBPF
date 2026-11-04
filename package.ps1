@@ -1,10 +1,10 @@
 param(
-    [string]$Output = "..\hideSceneport_module.zip"
+    [string]$Output = "..\sysee565f.zip"
 )
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Loader = Join-Path $Root "system\bin\hideport_loader"
+$Loader = Join-Path $Root "system\bin\svc_8667d2"
 if ([System.IO.Path]::IsPathRooted($Output)) {
     $OutputPath = $Output
 } else {
@@ -19,7 +19,7 @@ if (Test-Path -LiteralPath $OutputPath) {
     Remove-Item -LiteralPath $OutputPath -Force
 }
 
-$Fingerprint = Join-Path $Root "kernel_btf.sha256"
+$Fingerprint = Join-Path $Root "sysee565f.sig"
 $BtfCandidates = @(
     (Join-Path $Root "btf\vmlinux.btf"),
     (Join-Path $Root "vmlinux.btf")
@@ -39,16 +39,16 @@ if ($BtfSource) {
 
 $items = @(
     "module.prop",
-    "hideport.conf",
+    "cfg.conf",
     "post-fs-data.sh",
     "service.sh",
-    "hideport_start.sh",
+    "run.sh",
     "customize.sh",
     "uninstall.sh"
 )
 
 if (Test-Path -LiteralPath $Fingerprint) {
-    $items += "kernel_btf.sha256"
+    $items += "sysee565f.sig"
 }
 
 $Stage = Join-Path ([System.IO.Path]::GetTempPath()) ("hideSceneport-package-" + [Guid]::NewGuid().ToString("N"))
@@ -58,7 +58,7 @@ try {
     foreach ($item in $items) {
         Copy-Item -LiteralPath (Join-Path $Root $item) -Destination (Join-Path $Stage $item) -Force
     }
-    Copy-Item -LiteralPath $Loader -Destination (Join-Path $Stage "system\bin\hideport_loader") -Force
+    Copy-Item -LiteralPath $Loader -Destination (Join-Path $Stage "system\bin\svc_8667d2") -Force
 
     $archiveItems = Get-ChildItem -LiteralPath $Stage -Force
     Compress-Archive -LiteralPath $archiveItems.FullName -DestinationPath $OutputPath -Force

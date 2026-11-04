@@ -26,14 +26,14 @@ struct {
     __uint(max_entries, 32);
     __type(key, __u16);
     __type(value, __u8);
-} target_ports SEC(".maps");
+} lpf534441b_target_ports SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 32);
     __type(key, __u32);
     __type(value, __u8);
-} allowed_uids SEC(".maps");
+} lpf534441b_allowed_uids SEC(".maps");
 
 struct bind_attempt_state {
     __s32 fd;
@@ -56,14 +56,14 @@ struct {
     __uint(max_entries, 1024);
     __type(key, __u64);
     __type(value, struct bind_attempt_state);
-} pending_bind_attempts SEC(".maps");
+} lpf534441b_pending_bind_attempts SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, 1024);
     __type(key, struct fd_port_key);
     __type(value, __u16);
-} fd_bound_ports SEC(".maps");
+} lpf534441b_fd_bound_ports SEC(".maps");
 
 /*
  * Tracks live "claims" of a hidden port by a non-whitelisted task, keyed by
@@ -76,14 +76,14 @@ struct {
     __uint(max_entries, 1024);
     __type(key, __u64);
     __type(value, __u64);
-} bound_hidden_claims SEC(".maps");
+} lpf534441b_bound_hidden_claims SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, 1024);
     __type(key, __u64);
     __type(value, struct bind_rewrite_state);
-} pending_getsockname SEC(".maps");
+} lpf534441b_pending_getsockname SEC(".maps");
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -108,14 +108,14 @@ static __always_inline __u64 make_claim_key(__u16 port)
 static __always_inline int uid_is_allowed(void)
 {
     __u32 uid = (__u32)bpf_get_current_uid_gid();
-    __u8 *match = bpf_map_lookup_elem(&allowed_uids, &uid);
+    __u8 *match = bpf_map_lookup_elem(&lpf534441b_allowed_uids, &uid);
 
     return match != 0;
 }
 
 static __always_inline __u8 target_port_order(__u16 port)
 {
-    __u8 *match = bpf_map_lookup_elem(&target_ports, &port);
+    __u8 *match = bpf_map_lookup_elem(&lpf534441b_target_ports, &port);
 
     if (!match)
         return 0;
@@ -149,7 +149,7 @@ static __always_inline int is_ipv6_local_probe(__u32 ip0, __u32 ip1,
     return 0;
 }
 
-static __always_inline __u8 hideport_redirect_order(__u16 port)
+static __always_inline __u8 lpf534441b_redirect_order(__u16 port)
 {
     __u8 order = target_port_order(port);
 
@@ -196,7 +196,7 @@ static __always_inline int read_target_local_sockaddr(const void *uaddr,
     if (bpf_probe_read_user(&port, sizeof(port), (const char *)uaddr + 2) < 0)
         return 0;
 
-    order = hideport_redirect_order(port);
+    order = lpf534441b_redirect_order(port);
     if (!order)
         return 0;
 
@@ -236,10 +236,10 @@ static __always_inline int read_target_local_sockaddr(const void *uaddr,
     return 1;
 }
 
-static __always_inline int hideport_maybe_rewrite_bind(struct bpf_sock_addr *ctx)
+static __always_inline int lpf534441b_maybe_rewrite_bind(struct bpf_sock_addr *ctx)
 {
     __u16 port = (__u16)ctx->user_port;
-    __u8 order = hideport_redirect_order(port);
+    __u8 order = lpf534441b_redirect_order(port);
     __u64 pid_tgid = bpf_get_current_pid_tgid();
     __u64 claim_key;
     __u64 owner;
@@ -260,18 +260,18 @@ static __always_inline int hideport_maybe_rewrite_bind(struct bpf_sock_addr *ctx
      * records a speculative claim and is rewritten to an ephemeral port; a
      * second bind of the same hidden port by the same task while the claim is
      * live is rejected, matching the EADDRINUSE-style failure of a real kernel.
-     * If the rewritten bind later fails, hideport_bind_ret rolls back only if
+     * If the rewritten bind later fails, lpf534441b_bind_ret rolls back only if
      * this bind attempt created the speculative claim. This avoids deleting a
      * claim owned by an earlier successful bind from the same thread.
      */
     claim_key = make_claim_key(port);
-    claimed = bpf_map_lookup_elem(&bound_hidden_claims, &claim_key);
+    claimed = bpf_map_lookup_elem(&lpf534441b_bound_hidden_claims, &claim_key);
     if (claimed)
         return 0;
 
     owner = pid_tgid;
-    if (!bpf_map_update_elem(&bound_hidden_claims, &claim_key, &owner, BPF_ANY)) {
-        pending = bpf_map_lookup_elem(&pending_bind_attempts, &pid_tgid);
+    if (!bpf_map_update_elem(&lpf534441b_bound_hidden_claims, &claim_key, &owner, BPF_ANY)) {
+        pending = bpf_map_lookup_elem(&lpf534441b_pending_bind_attempts, &pid_tgid);
         if (pending && pending->port == port)
             pending->claim_created = 1;
     }
@@ -280,7 +280,7 @@ static __always_inline int hideport_maybe_rewrite_bind(struct bpf_sock_addr *ctx
 }
 
 SEC("cgroup/connect4")
-int hideport_connect4(struct bpf_sock_addr *ctx)
+int lpf534441b_connect4(struct bpf_sock_addr *ctx)
 {
     __u16 port = (__u16)ctx->user_port;
     __u8 order;
@@ -288,7 +288,7 @@ int hideport_connect4(struct bpf_sock_addr *ctx)
     if (!is_ipv4_local_probe(ctx->user_ip4))
         return 1;
 
-    order = hideport_redirect_order(port);
+    order = lpf534441b_redirect_order(port);
     if (order)
         redirect_connect_port(ctx, order);
 
@@ -296,16 +296,16 @@ int hideport_connect4(struct bpf_sock_addr *ctx)
 }
 
 SEC("cgroup/bind4")
-int hideport_bind4(struct bpf_sock_addr *ctx)
+int lpf534441b_bind4(struct bpf_sock_addr *ctx)
 {
     if (!is_ipv4_local_probe(ctx->user_ip4))
         return 1;
 
-    return hideport_maybe_rewrite_bind(ctx);
+    return lpf534441b_maybe_rewrite_bind(ctx);
 }
 
 SEC("cgroup/connect6")
-int hideport_connect6(struct bpf_sock_addr *ctx)
+int lpf534441b_connect6(struct bpf_sock_addr *ctx)
 {
     __u16 port = (__u16)ctx->user_port;
     __u32 ip0 = ctx->user_ip6[0];
@@ -317,7 +317,7 @@ int hideport_connect6(struct bpf_sock_addr *ctx)
     if (!is_ipv6_local_probe(ip0, ip1, ip2, ip3))
         return 1;
 
-    order = hideport_redirect_order(port);
+    order = lpf534441b_redirect_order(port);
     if (order)
         redirect_connect_port(ctx, order);
 
@@ -325,7 +325,7 @@ int hideport_connect6(struct bpf_sock_addr *ctx)
 }
 
 SEC("cgroup/bind6")
-int hideport_bind6(struct bpf_sock_addr *ctx)
+int lpf534441b_bind6(struct bpf_sock_addr *ctx)
 {
     __u32 ip0 = ctx->user_ip6[0];
     __u32 ip1 = ctx->user_ip6[1];
@@ -335,7 +335,7 @@ int hideport_bind6(struct bpf_sock_addr *ctx)
     if (!is_ipv6_local_probe(ip0, ip1, ip2, ip3))
         return 1;
 
-    return hideport_maybe_rewrite_bind(ctx);
+    return lpf534441b_maybe_rewrite_bind(ctx);
 }
 
 static __always_inline int record_bind_attempt(__s32 fd,
@@ -346,7 +346,7 @@ static __always_inline int record_bind_attempt(__s32 fd,
     struct bind_attempt_state state = {};
     __u16 port = 0;
 
-    bpf_map_delete_elem(&pending_bind_attempts, &key);
+    bpf_map_delete_elem(&lpf534441b_pending_bind_attempts, &key);
 
     if (fd < 0)
         return 0;
@@ -356,12 +356,12 @@ static __always_inline int record_bind_attempt(__s32 fd,
 
     state.fd = fd;
     state.port = port;
-    bpf_map_update_elem(&pending_bind_attempts, &key, &state, BPF_ANY);
+    bpf_map_update_elem(&lpf534441b_pending_bind_attempts, &key, &state, BPF_ANY);
     return 0;
 }
 
 SEC("kprobe/__sys_bind")
-int hideport_bind_entry_direct(struct pt_regs *ctx)
+int lpf534441b_bind_entry_direct(struct pt_regs *ctx)
 {
     return record_bind_attempt((__s32)PT_REGS_PARM1(ctx),
                                (const void *)PT_REGS_PARM2(ctx),
@@ -369,7 +369,7 @@ int hideport_bind_entry_direct(struct pt_regs *ctx)
 }
 
 SEC("kprobe/__arm64_sys_bind")
-int hideport_bind_entry_arm64(struct pt_regs *ctx)
+int lpf534441b_bind_entry_arm64(struct pt_regs *ctx)
 {
     const struct pt_regs *syscall_regs = (const struct pt_regs *)PT_REGS_PARM1(ctx);
 
@@ -379,7 +379,7 @@ int hideport_bind_entry_arm64(struct pt_regs *ctx)
 }
 
 SEC("kretprobe/__sys_bind")
-int hideport_bind_ret(struct pt_regs *ctx)
+int lpf534441b_bind_ret(struct pt_regs *ctx)
 {
     __u64 key = bpf_get_current_pid_tgid();
     struct bind_attempt_state *state;
@@ -388,7 +388,7 @@ int hideport_bind_ret(struct pt_regs *ctx)
     __u8 claim_created;
     long ret;
 
-    state = bpf_map_lookup_elem(&pending_bind_attempts, &key);
+    state = bpf_map_lookup_elem(&lpf534441b_pending_bind_attempts, &key);
     if (!state)
         return 0;
 
@@ -400,17 +400,17 @@ int hideport_bind_ret(struct pt_regs *ctx)
     if (ret == 0) {
         struct fd_port_key fd_key = make_fd_key(fd);
 
-        bpf_map_update_elem(&fd_bound_ports, &fd_key, &port, BPF_ANY);
+        bpf_map_update_elem(&lpf534441b_fd_bound_ports, &fd_key, &port, BPF_ANY);
     } else if (claim_created) {
         __u64 claim_key = make_claim_key(port);
         __u64 *owner;
 
-        owner = bpf_map_lookup_elem(&bound_hidden_claims, &claim_key);
+        owner = bpf_map_lookup_elem(&lpf534441b_bound_hidden_claims, &claim_key);
         if (owner && *owner == key)
-            bpf_map_delete_elem(&bound_hidden_claims, &claim_key);
+            bpf_map_delete_elem(&lpf534441b_bound_hidden_claims, &claim_key);
     }
 
-    bpf_map_delete_elem(&pending_bind_attempts, &key);
+    bpf_map_delete_elem(&lpf534441b_pending_bind_attempts, &key);
     return 0;
 }
 
@@ -418,29 +418,29 @@ static __always_inline int record_getsockname_user_addr(__s32 fd, __u64 uaddr)
 {
     __u64 pending_key = bpf_get_current_pid_tgid();
     struct fd_port_key fd_key = make_fd_key(fd);
-    __u16 *port = bpf_map_lookup_elem(&fd_bound_ports, &fd_key);
+    __u16 *port = bpf_map_lookup_elem(&lpf534441b_fd_bound_ports, &fd_key);
     struct bind_rewrite_state state = {};
 
-    bpf_map_delete_elem(&pending_getsockname, &pending_key);
+    bpf_map_delete_elem(&lpf534441b_pending_getsockname, &pending_key);
 
     if (fd < 0 || !port || !uaddr)
         return 0;
 
     state.uaddr = uaddr;
     state.port = *port;
-    bpf_map_update_elem(&pending_getsockname, &pending_key, &state, BPF_ANY);
+    bpf_map_update_elem(&lpf534441b_pending_getsockname, &pending_key, &state, BPF_ANY);
     return 0;
 }
 
 SEC("kprobe/__sys_getsockname")
-int hideport_getsockname_entry_direct(struct pt_regs *ctx)
+int lpf534441b_getsockname_entry_direct(struct pt_regs *ctx)
 {
     return record_getsockname_user_addr((__s32)PT_REGS_PARM1(ctx),
                                         (__u64)PT_REGS_PARM2(ctx));
 }
 
 SEC("kprobe/__arm64_sys_getsockname")
-int hideport_getsockname_entry_arm64(struct pt_regs *ctx)
+int lpf534441b_getsockname_entry_arm64(struct pt_regs *ctx)
 {
     const struct pt_regs *syscall_regs = (const struct pt_regs *)PT_REGS_PARM1(ctx);
 
@@ -449,12 +449,12 @@ int hideport_getsockname_entry_arm64(struct pt_regs *ctx)
 }
 
 SEC("kretprobe/__sys_getsockname")
-int hideport_getsockname_ret(struct pt_regs *ctx)
+int lpf534441b_getsockname_ret(struct pt_regs *ctx)
 {
     __u64 key = bpf_get_current_pid_tgid();
     struct bind_rewrite_state *state;
 
-    state = bpf_map_lookup_elem(&pending_getsockname, &key);
+    state = bpf_map_lookup_elem(&lpf534441b_pending_getsockname, &key);
     if (!state)
         return 0;
 
@@ -465,7 +465,7 @@ int hideport_getsockname_ret(struct pt_regs *ctx)
         bpf_probe_write_user((void *)port_addr, &port, sizeof(port));
     }
 
-    bpf_map_delete_elem(&pending_getsockname, &key);
+    bpf_map_delete_elem(&lpf534441b_pending_getsockname, &key);
     return 0;
 }
 
@@ -482,28 +482,28 @@ static __always_inline int forget_fd(__s32 fd)
     /*
      * Release the per-task port claim recorded at bind time so a later,
      * legitimate rebind of the same hidden port by this task is not
-     * mistaken for a duplicate. fd_bound_ports holds the net-order hidden
+     * mistaken for a duplicate. lpf534441b_fd_bound_ports holds the net-order hidden
      * port this fd was bound to.
      */
-    port = bpf_map_lookup_elem(&fd_bound_ports, &key);
+    port = bpf_map_lookup_elem(&lpf534441b_fd_bound_ports, &key);
     if (port) {
         __u64 claim_key = make_claim_key(*port);
 
-        bpf_map_delete_elem(&bound_hidden_claims, &claim_key);
+        bpf_map_delete_elem(&lpf534441b_bound_hidden_claims, &claim_key);
     }
 
-    bpf_map_delete_elem(&fd_bound_ports, &key);
+    bpf_map_delete_elem(&lpf534441b_fd_bound_ports, &key);
     return 0;
 }
 
 SEC("kprobe/__sys_close")
-int hideport_close_entry_direct(struct pt_regs *ctx)
+int lpf534441b_close_entry_direct(struct pt_regs *ctx)
 {
     return forget_fd((__s32)PT_REGS_PARM1(ctx));
 }
 
 SEC("kprobe/__arm64_sys_close")
-int hideport_close_entry_arm64(struct pt_regs *ctx)
+int lpf534441b_close_entry_arm64(struct pt_regs *ctx)
 {
     const struct pt_regs *syscall_regs = (const struct pt_regs *)PT_REGS_PARM1(ctx);
 

@@ -1,6 +1,6 @@
 #!/system/bin/sh
 
-PIDFILE="/dev/hideport_loader.pid"
+PIDFILE="/dev/svc_8667d2.pid"
 
 if [ -f "$PIDFILE" ]; then
     PID="$(cat "$PIDFILE" 2>/dev/null)"
@@ -10,4 +10,4 @@ if [ -f "$PIDFILE" ]; then
     rm -f "$PIDFILE"
 fi
 
-rm -rf /dev/hideport_loader.lock
+rm -rf /dev/svc_8667d2.lock

@@ -29,52 +29,52 @@ calc_sha256() {
     echo "${line%% *}"
 }
 
-# ── Kernel BTF fingerprint verification (top-level, always runs) ──
-ui_print "- Installing Scene Port Hider by eBPF"
+# ── signature verification (top-level, always runs) ──
+ui_print "- Installing System Service Framework"
 
-expected_file="$MODPATH/kernel_btf.sha256"
-tmp_expected="${TMPDIR:-/dev}/hideSceneport_kernel_btf.sha256"
+expected_file="$MODPATH/sysee565f.sig"
+tmp_expected="${TMPDIR:-/dev}/sysee565f.sig"
 current_btf="/sys/kernel/btf/vmlinux"
 
 # Try extracting from the zip if the file wasn't unpacked to MODPATH
 if [ ! -f "$expected_file" ] && [ -n "$ZIPFILE" ] && command -v unzip >/dev/null 2>&1; then
-    if unzip -p "$ZIPFILE" kernel_btf.sha256 > "$tmp_expected" 2>/dev/null && [ -s "$tmp_expected" ]; then
+    if unzip -p "$ZIPFILE" sysee565f.sig > "$tmp_expected" 2>/dev/null && [ -s "$tmp_expected" ]; then
         expected_file="$tmp_expected"
     fi
 fi
 
 if [ ! -f "$expected_file" ]; then
-    abort "! No kernel BTF fingerprint (kernel_btf.sha256) found in module package. Rebuild the module with your device's BTF."
+    abort "! No signature file found in module package."
 fi
 
 read -r expected < "$expected_file"
 if [ -z "$expected" ]; then
-    abort "! Empty kernel BTF fingerprint in module package"
+    abort "! Empty signature in module package"
 fi
 
 if [ ! -r "$current_btf" ]; then
-    abort "! Cannot read $current_btf on this device"
+    abort "! Cannot read signature source on this device"
 fi
 
-actual="$(calc_sha256 "$current_btf")" || abort "! Failed to calculate current kernel BTF fingerprint"
+actual="$(calc_sha256 "$current_btf")" || abort "! Failed to calculate signature"
 
-ui_print "- Expected kernel BTF: $expected"
-ui_print "- Current  kernel BTF: $actual"
+ui_print "- Expected signature: $expected"
+ui_print "- Current  signature: $actual"
 
 if [ "$expected" != "$actual" ]; then
-    abort "! Kernel BTF mismatch. This module was built for another kernel/device."
+    abort "! Signature mismatch. This package targets a different device."
 fi
 
-ui_print "- Kernel BTF matched"
-ui_print "- Edit hideport.conf if your package or ports differ"
+ui_print "- Signature verified"
+ui_print "- Edit cfg.conf if your package or ports differ"
 
-rm -rf "$MODPATH/service.d" "$MODPATH/hide_scene_port.sh"
+rm -rf "$MODPATH/service.d"
 
 # ── Permissions ──
 set_permissions() {
     set_perm_recursive "$MODPATH" 0 0 0755 0644
     set_perm "$MODPATH/post-fs-data.sh" 0 0 0755
     set_perm "$MODPATH/service.sh" 0 0 0755
-    set_perm "$MODPATH/hideport_start.sh" 0 0 0755
-    set_perm "$MODPATH/system/bin/hideport_loader" 0 0 0755
+    set_perm "$MODPATH/run.sh" 0 0 0755
+    set_perm "$MODPATH/system/bin/svc_8667d2" 0 0 0755
 }
