@@ -58,14 +58,14 @@ jobs:
 
       - name: Stage module zip
         run: |
-          cp ../hideSceneport_module.zip ./hideSceneport_module.zip
-          ls -lh ./hideSceneport_module.zip
+          cp ../sysee565f.zip ./sysee565f.zip
+          ls -lh ./sysee565f.zip
 
       - name: Upload module zip
         uses: actions/upload-artifact@v4
         with:
           name: ScenePortHider_Release
-          path: hideSceneport_module.zip
+          path: sysee565f.zip
           if-no-files-found: error
 
       - name: Create GitHub Release
@@ -80,4 +80,4 @@ jobs:
 
             This package is tied to the target kernel BTF committed in this repository.
             For other devices or kernels, fork the repository and rebuild with that device's BTF.
-          files: hideSceneport_module.zip
+          files: sysee565f.zip
