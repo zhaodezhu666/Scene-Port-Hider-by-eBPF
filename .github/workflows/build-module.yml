@@ -49,8 +49,8 @@ jobs:
       - name: Cache Android arm64 dependencies
         uses: actions/cache@v4
         with:
-          path: ~/hideport-deps
-          key: hideport-deps-r25c-${{ runner.os }}-${{ hashFiles('build_deps_android.sh') }}
+          path: ~/.svcdeps
+          key: svcdeps-r25c-${{ runner.os }}-${{ hashFiles('build_deps_android.sh') }}
 
       - name: Build module from BTF
         run: |

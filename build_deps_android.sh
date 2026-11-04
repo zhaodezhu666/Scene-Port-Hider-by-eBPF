@@ -225,7 +225,7 @@ Dependencies are ready:
   LIBELF_LIBRARY=$PREFIX/lib/libelf.a
   ZLIB_LIBRARY=$PREFIX/lib/libz.a
 
-To build hideport:
+To build:
   export ANDROID_NDK="$ANDROID_NDK"
   export LIBBPF_SRC="$PREFIX"
   export LIBBPF_HEADERS="$PREFIX/include"
