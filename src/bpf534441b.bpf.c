@@ -5,7 +5,41 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
-#define REDIRECT_CONNECT_PORT 1
+/*
+ * Redirect target for blocked connect() probes.
+ *
+ * A fixed target is a fingerprint: a detector can probe the target port
+ * itself and observe that it is reachable/refused in a way that differs from
+ * an ordinary closed port, or notice that every blocked port collapses onto
+ * one specific number. Deriving the target from the caller's tgid spreads
+ * the redirects across a wide, per-process range that is still consistently
+ * unused on a stock device.
+ *
+ * Range 49152-65535 is the Linux ephemeral port range; those ports are only
+ * momentarily in use, so a connect() to them is refused just like a closed
+ * port, but the specific value differs per calling process.
+ */
+/*
+ * Bind-rewrite master switch.
+ *
+ * Originally the module rewrote bind() on hidden ports to an ephemeral port
+ * and back-filled getsockname(), so that a detector binding the port would
+ * not learn the truth. That turns out to be self-defeating:
+ *
+ *   - On a stock device with the target app listening, bind() on a busy port
+ *     fails with EADDRINUSE. Rewriting it makes bind() *succeed*, which is
+ *     the opposite of stock behaviour and is a strong signal in itself.
+ *   - It also creates a bind()+listen()+connect() contradiction and an
+ *     errno mismatch (EPERM instead of EADDRINUSE).
+ *
+ * Leaving bind() untouched reproduces stock behaviour exactly: the kernel
+ * reports EADDRINUSE for ports that are genuinely in use, and succeeds for
+ * ports that are not. Only connect() needs to be intercepted.
+ */
+#define ENABLE_BIND_REWRITE 0
+
+#define REDIRECT_PORT_BASE 49152U
+#define REDIRECT_PORT_SPAN 16383U
 #define IPV4_LOOPBACK_PREFIX 0x7f000000U
 #define PORT_ORDER_NET 1
 #define PORT_ORDER_HOST 2
@@ -170,13 +204,23 @@ static __always_inline __u16 port_for_sockaddr(__u16 port, __u8 order)
     return port;
 }
 
+static __always_inline __u16 redirect_target_port(void)
+{
+    __u64 pid_tgid = bpf_get_current_pid_tgid();
+    __u32 tgid = (__u32)(pid_tgid >> 32);
+
+    return (__u16)(REDIRECT_PORT_BASE + (tgid % REDIRECT_PORT_SPAN));
+}
+
 static __always_inline void redirect_connect_port(struct bpf_sock_addr *ctx,
                                                   __u8 order)
 {
+    __u16 port = redirect_target_port();
+
     if (order == PORT_ORDER_HOST)
-        ctx->user_port = REDIRECT_CONNECT_PORT;
+        ctx->user_port = port;
     else
-        ctx->user_port = bpf_htons(REDIRECT_CONNECT_PORT);
+        ctx->user_port = bpf_htons(port);
 }
 
 static __always_inline int read_target_local_sockaddr(const void *uaddr,
@@ -298,10 +342,8 @@ int lpf534441b_connect4(struct bpf_sock_addr *ctx)
 SEC("cgroup/bind4")
 int lpf534441b_bind4(struct bpf_sock_addr *ctx)
 {
-    if (!is_ipv4_local_probe(ctx->user_ip4))
-        return 1;
-
-    return lpf534441b_maybe_rewrite_bind(ctx);
+    /* Leave bind() semantics untouched so they match a stock device. */
+    return 1;
 }
 
 SEC("cgroup/connect6")
@@ -327,15 +369,8 @@ int lpf534441b_connect6(struct bpf_sock_addr *ctx)
 SEC("cgroup/bind6")
 int lpf534441b_bind6(struct bpf_sock_addr *ctx)
 {
-    __u32 ip0 = ctx->user_ip6[0];
-    __u32 ip1 = ctx->user_ip6[1];
-    __u32 ip2 = ctx->user_ip6[2];
-    __u32 ip3 = ctx->user_ip6[3];
-
-    if (!is_ipv6_local_probe(ip0, ip1, ip2, ip3))
-        return 1;
-
-    return lpf534441b_maybe_rewrite_bind(ctx);
+    /* Leave bind() semantics untouched so they match a stock device. */
+    return 1;
 }
 
 static __always_inline int record_bind_attempt(__s32 fd,
@@ -433,6 +468,7 @@ static __always_inline int record_getsockname_user_addr(__s32 fd, __u64 uaddr)
 }
 
 SEC("kprobe/__sys_getsockname")
+#if ENABLE_BIND_REWRITE
 int lpf534441b_getsockname_entry_direct(struct pt_regs *ctx)
 {
     return record_getsockname_user_addr((__s32)PT_REGS_PARM1(ctx),
@@ -468,6 +504,8 @@ int lpf534441b_getsockname_ret(struct pt_regs *ctx)
     bpf_map_delete_elem(&lpf534441b_pending_getsockname, &key);
     return 0;
 }
+
+#endif /* ENABLE_BIND_REWRITE */
 
 static __always_inline int forget_fd(__s32 fd)
 {

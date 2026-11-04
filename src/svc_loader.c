@@ -259,6 +259,7 @@ static void detach_cgroup_connect_prog(struct bpf_program *prog,
     }
 }
 
+#if 0
 static int attach_getsockname_pair(struct bpf_program *entry_prog,
                                    struct bpf_program *ret_prog,
                                    const char *symbol,
@@ -276,6 +277,7 @@ static int attach_getsockname_pair(struct bpf_program *entry_prog,
                 symbol, err, strerror((int)-err));
         return (int)err;
     }
+#endif
 
     ret = bpf_program__attach_kprobe(ret_prog, true, symbol);
     err = libbpf_get_error(ret);
@@ -292,6 +294,7 @@ static int attach_getsockname_pair(struct bpf_program *entry_prog,
     return 0;
 }
 
+#if 0
 static int attach_getsockname_probes(struct bpf534441b_bpf *skel,
                                      struct bpf_link **entry_link,
                                      struct bpf_link **ret_link)
@@ -315,6 +318,7 @@ static int attach_getsockname_probes(struct bpf534441b_bpf *skel,
             return 0;
         }
     }
+#endif
 
     for (size_t i = 0; i < sizeof(arm64_symbols) / sizeof(arm64_symbols[0]); i++) {
         if (!attach_getsockname_pair(skel->progs.lpf534441b_getsockname_entry_arm64,
@@ -329,6 +333,7 @@ static int attach_getsockname_probes(struct bpf534441b_bpf *skel,
     return -ENOENT;
 }
 
+#if 0
 static int attach_bind_pair(struct bpf_program *entry_prog,
                             struct bpf_program *ret_prog,
                             const char *symbol,
@@ -346,6 +351,7 @@ static int attach_bind_pair(struct bpf_program *entry_prog,
                 symbol, err, strerror((int)-err));
         return (int)err;
     }
+#endif
 
     ret = bpf_program__attach_kprobe(ret_prog, true, symbol);
     err = libbpf_get_error(ret);
@@ -362,6 +368,7 @@ static int attach_bind_pair(struct bpf_program *entry_prog,
     return 0;
 }
 
+#if 0
 static int attach_bind_probes(struct bpf534441b_bpf *skel,
                               struct bpf_link **entry_link,
                               struct bpf_link **ret_link)
@@ -385,6 +392,7 @@ static int attach_bind_probes(struct bpf534441b_bpf *skel,
             return 0;
         }
     }
+#endif
 
     for (size_t i = 0; i < sizeof(arm64_symbols) / sizeof(arm64_symbols[0]); i++) {
         if (!attach_bind_pair(skel->progs.lpf534441b_bind_entry_arm64,
@@ -399,7 +407,8 @@ static int attach_bind_probes(struct bpf534441b_bpf *skel,
     return -ENOENT;
 }
 
-static struct bpf_link *try_attach_close_symbols(struct bpf_program *prog,
+#if 0
+static struct bpf_link * try_attach_close_symbols(struct bpf_program *prog,
                                                  const char *const *symbols,
                                                  size_t count,
                                                  const char *kind)
@@ -414,6 +423,7 @@ static struct bpf_link *try_attach_close_symbols(struct bpf_program *prog,
             fprintf(stderr, "attached close cleanup probe to %s\n", symbols[i]);
             return link;
         }
+#endif
 
         fprintf(stderr, "attach close cleanup %s probe to %s failed: %ld (%s)\n",
                 kind, symbols[i], err, strerror((int)-err));
@@ -422,7 +432,8 @@ static struct bpf_link *try_attach_close_symbols(struct bpf_program *prog,
     return NULL;
 }
 
-static struct bpf_link *attach_optional_close_probe(struct bpf534441b_bpf *skel)
+#if 0
+static struct bpf_link * attach_optional_close_probe(struct bpf534441b_bpf *skel)
 {
     static const char *const direct_symbols[] = {
         "__sys_close",
@@ -447,22 +458,15 @@ static struct bpf_link *attach_optional_close_probe(struct bpf534441b_bpf *skel)
                                     sizeof(arm64_symbols) / sizeof(arm64_symbols[0]),
                                     "arm64 syscall-wrapper");
 }
+#endif
 
 int main(int argc, char **argv)
 {
     struct config cfg;
     struct bpf534441b_bpf *skel = NULL;
-    struct bpf_link *bind_entry_link = NULL;
-    struct bpf_link *bind_ret_link = NULL;
-    struct bpf_link *getsockname_entry_link = NULL;
-    struct bpf_link *getsockname_ret_link = NULL;
-    struct bpf_link *close_link = NULL;
     int cgroup_fd = -1;
     int connect4_attached = 0;
     int connect6_attached = 0;
-    int bind4_attached = 0;
-    int bind6_attached = 0;
-    int bind_rewrite_enabled = 0;
     int err;
 
     err = parse_args(argc, argv, &cfg);
@@ -526,48 +530,19 @@ int main(int argc, char **argv)
         goto cleanup;
     connect6_attached = 1;
 
-    err = attach_getsockname_probes(skel,
-                                    &getsockname_entry_link,
-                                    &getsockname_ret_link);
-    if (err) {
-        fprintf(stderr, "warning: getsockname probes unavailable; bind rewrite disabled\n");
-        err = 0;
-    } else {
-        err = attach_bind_probes(skel,
-                                 &bind_entry_link,
-                                 &bind_ret_link);
-        if (err) {
-            fprintf(stderr, "warning: bind probes unavailable; bind rewrite disabled\n");
-            bpf_link__destroy(getsockname_ret_link);
-            bpf_link__destroy(getsockname_entry_link);
-            getsockname_ret_link = NULL;
-            getsockname_entry_link = NULL;
-            err = 0;
-        } else {
-            bind_rewrite_enabled = 1;
-            close_link = attach_optional_close_probe(skel);
-            if (!close_link)
-                fprintf(stderr, "warning: close cleanup probe unavailable; fd state will expire by LRU\n");
-        }
-    }
-
-    if (bind_rewrite_enabled) {
-        err = attach_cgroup_connect_prog(skel->progs.lpf534441b_bind4,
-                                         cgroup_fd,
-                                         BPF_CGROUP_INET4_BIND,
-                                         "bind4");
-        if (err)
-            goto cleanup;
-        bind4_attached = 1;
-
-        err = attach_cgroup_connect_prog(skel->progs.lpf534441b_bind6,
-                                         cgroup_fd,
-                                         BPF_CGROUP_INET6_BIND,
-                                         "bind6");
-        if (err)
-            goto cleanup;
-        bind6_attached = 1;
-    }
+    /*
+     * bind() is deliberately left alone.
+     *
+     * On a stock device the target app holds these ports, so bind() on a
+     * busy one fails with EADDRINUSE. Intercepting bind() to make it
+     * succeed would be a behavioural deviation that a detector can spot
+     * directly, and it would also introduce a bind()+listen()+connect()
+     * contradiction plus an errno mismatch (EPERM vs EADDRINUSE).
+     *
+     * Not touching bind() keeps the observable behaviour identical to a
+     * device without the target app, and it also keeps three fewer kprobes
+     * out of the kernel.
+     */
 
     fprintf(stderr, "service hooks loaded\n");
     while (!exiting)
@@ -576,16 +551,6 @@ int main(int argc, char **argv)
     err = 0;
 
 cleanup:
-    if (bind6_attached)
-        detach_cgroup_connect_prog(skel->progs.lpf534441b_bind6,
-                                   cgroup_fd,
-                                   BPF_CGROUP_INET6_BIND,
-                                   "bind6");
-    if (bind4_attached)
-        detach_cgroup_connect_prog(skel->progs.lpf534441b_bind4,
-                                   cgroup_fd,
-                                   BPF_CGROUP_INET4_BIND,
-                                   "bind4");
     if (connect6_attached)
         detach_cgroup_connect_prog(skel->progs.lpf534441b_connect6,
                                    cgroup_fd,
@@ -596,11 +561,6 @@ cleanup:
                                    cgroup_fd,
                                    BPF_CGROUP_INET4_CONNECT,
                                    "connect4");
-    bpf_link__destroy(close_link);
-    bpf_link__destroy(bind_ret_link);
-    bpf_link__destroy(bind_entry_link);
-    bpf_link__destroy(getsockname_ret_link);
-    bpf_link__destroy(getsockname_entry_link);
     if (cgroup_fd >= 0)
         close(cgroup_fd);
     bpf534441b_bpf__destroy(skel);
