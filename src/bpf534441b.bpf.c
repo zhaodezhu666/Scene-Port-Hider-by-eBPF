@@ -279,7 +279,7 @@ static __always_inline int read_target_local_sockaddr(const void *uaddr,
     *sockaddr_port = port_for_sockaddr(port, order);
     return 1;
 }
-
+#if ENABLE_BIND_REWRITE
 static __always_inline int lpf534441b_maybe_rewrite_bind(struct bpf_sock_addr *ctx)
 {
     __u16 port = (__u16)ctx->user_port;
@@ -322,6 +322,8 @@ static __always_inline int lpf534441b_maybe_rewrite_bind(struct bpf_sock_addr *c
     ctx->user_port = 0;
     return 1;
 }
+
+#endif /* ENABLE_BIND_REWRITE */
 
 SEC("cgroup/connect4")
 int lpf534441b_connect4(struct bpf_sock_addr *ctx)
@@ -373,6 +375,17 @@ int lpf534441b_bind6(struct bpf_sock_addr *ctx)
     return 1;
 }
 
+/*
+ * bind()/getsockname()/close() interception is disabled by default.
+ *
+ * Rewriting bind() makes bind() succeed on ports a stock device would reject
+ * with EADDRINUSE. That deviation is a signal in itself, and it also creates a
+ * bind()+listen()+connect() contradiction plus an errno mismatch (EPERM instead
+ * of EADDRINUSE). Leaving bind() untouched keeps observable behaviour identical
+ * to a device without the target app, and keeps three fewer kprobes out of the
+ * kernel.
+ */
+#if ENABLE_BIND_REWRITE
 static __always_inline int record_bind_attempt(__s32 fd,
                                                const void *uaddr,
                                                int addrlen)
@@ -467,8 +480,10 @@ static __always_inline int record_getsockname_user_addr(__s32 fd, __u64 uaddr)
     return 0;
 }
 
-SEC("kprobe/__sys_getsockname")
+#endif /* ENABLE_BIND_REWRITE */
+
 #if ENABLE_BIND_REWRITE
+SEC("kprobe/__sys_getsockname")
 int lpf534441b_getsockname_entry_direct(struct pt_regs *ctx)
 {
     return record_getsockname_user_addr((__s32)PT_REGS_PARM1(ctx),
@@ -504,8 +519,6 @@ int lpf534441b_getsockname_ret(struct pt_regs *ctx)
     bpf_map_delete_elem(&lpf534441b_pending_getsockname, &key);
     return 0;
 }
-
-#endif /* ENABLE_BIND_REWRITE */
 
 static __always_inline int forget_fd(__s32 fd)
 {
@@ -547,3 +560,5 @@ int lpf534441b_close_entry_arm64(struct pt_regs *ctx)
 
     return forget_fd((__s32)BPF_CORE_READ(syscall_regs, regs[0]));
 }
+
+#endif /* ENABLE_BIND_REWRITE */
